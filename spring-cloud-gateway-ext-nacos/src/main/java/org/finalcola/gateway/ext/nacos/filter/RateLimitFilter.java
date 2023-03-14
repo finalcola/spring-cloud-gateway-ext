@@ -3,9 +3,11 @@ package org.finalcola.gateway.ext.nacos.filter;
 import com.alibaba.nacos.api.config.listener.AbstractListener;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.reactor.ratelimiter.operator.RateLimiterOperator;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.finalcola.gateway.ext.nacos.access.NacosConfigAccess;
 import org.finalcola.gateway.ext.nacos.config.NacosExtProperties;
@@ -24,7 +26,6 @@ import java.time.Duration;
  */
 @Slf4j
 public class RateLimitFilter implements GlobalFilter {
-
 
     @Autowired
     private NacosExtProperties properties;
@@ -45,6 +46,9 @@ public class RateLimitFilter implements GlobalFilter {
                     configAccess.subscribeConfig(rateLimitDataId, group, new AbstractListener() {
                         @Override
                         public void receiveConfigInfo(String configInfo) {
+                            if (StringUtils.isBlank(configInfo)) {
+                                return;
+                            }
                             int rateLimit = NumberUtils.toInt(configInfo, -1);
                             if (rateLimit <= -1) {
                                 log.info("invalid rate limit config:{}", configInfo);
@@ -65,6 +69,13 @@ public class RateLimitFilter implements GlobalFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return null;
+        return chain.filter(exchange)
+                .transform(originMono -> {
+                    if (rateLimiter == null) {
+                        return originMono;
+                    }
+                    return RateLimiterOperator.<Void>of(rateLimiter)
+                            .apply(originMono);
+                });
     }
 }
