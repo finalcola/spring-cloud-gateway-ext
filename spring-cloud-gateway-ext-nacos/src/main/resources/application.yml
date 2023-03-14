@@ -1,0 +1,11 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: demo
+          uri: https://www.baidu.com
+          predicates:
+            - Path=/baidu/*
+    nacos:
+      server-addr: localhost:8848
+
